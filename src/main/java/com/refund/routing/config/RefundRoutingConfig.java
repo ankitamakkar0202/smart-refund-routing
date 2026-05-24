@@ -1,3 +1,5 @@
+package com.refund.routing.config;
+
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,22 +17,20 @@ import java.util.Properties;
  *   <li>Classpath resource {@code /refund-routing.properties}</li>
  *   <li>File system path {@code refund-routing.properties} (working directory)</li>
  * </ol>
- * If the file is missing, all getters return their documented defaults so the
- * system always boots with sensible values.
+ * If the file is missing, all getters return documented defaults so the system
+ * always boots with sensible values.
  */
 public final class RefundRoutingConfig {
 
     private final Properties props = new Properties();
 
     public RefundRoutingConfig() {
-        // 1. Try classpath first (works when running from the `out/` directory)
         InputStream classpathStream = getClass().getResourceAsStream("/refund-routing.properties");
         if (classpathStream != null) {
             load(classpathStream, "classpath:/refund-routing.properties");
             return;
         }
 
-        // 2. Fall back to current working directory
         try (InputStream fileStream = new FileInputStream("refund-routing.properties")) {
             load(fileStream, "file:refund-routing.properties");
         } catch (IOException e) {
@@ -103,7 +103,8 @@ public final class RefundRoutingConfig {
         try {
             return Integer.parseInt(val.trim());
         } catch (NumberFormatException e) {
-            System.err.println("[RefundRoutingConfig] Bad int for '" + key + "': " + val + " — using default " + defaultValue);
+            System.err.println("[RefundRoutingConfig] Bad int for '" + key + "': " + val
+                    + " — using default " + defaultValue);
             return defaultValue;
         }
     }
@@ -114,7 +115,8 @@ public final class RefundRoutingConfig {
         try {
             return Long.parseLong(val.trim());
         } catch (NumberFormatException e) {
-            System.err.println("[RefundRoutingConfig] Bad long for '" + key + "': " + val + " — using default " + defaultValue);
+            System.err.println("[RefundRoutingConfig] Bad long for '" + key + "': " + val
+                    + " — using default " + defaultValue);
             return defaultValue;
         }
     }
@@ -125,7 +127,8 @@ public final class RefundRoutingConfig {
         try {
             return Double.parseDouble(val.trim());
         } catch (NumberFormatException e) {
-            System.err.println("[RefundRoutingConfig] Bad double for '" + key + "': " + val + " — using default " + defaultValue);
+            System.err.println("[RefundRoutingConfig] Bad double for '" + key + "': " + val
+                    + " — using default " + defaultValue);
             return defaultValue;
         }
     }

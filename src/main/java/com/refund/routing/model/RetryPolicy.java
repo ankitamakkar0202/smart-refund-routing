@@ -1,3 +1,5 @@
+package com.refund.routing.model;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -16,7 +18,7 @@ import java.util.List;
  *   Attempt 3 → fallback[1], wait 2 000 ms
  * </pre>
  *
- * <p>Configuration values come from {@link RefundRoutingConfig}.
+ * <p>Configuration values come from {@code RefundRoutingConfig}.
  */
 public final class RetryPolicy {
 
@@ -32,17 +34,17 @@ public final class RetryPolicy {
     /**
      * Channels to try in order if the primary channel fails.
      * Length is at most {@code maxAttempts - 1}.
-     * Ranked by weighted score (best first) by {@link ChannelScoringRule}.
+     * Ranked by weighted score (best first) by {@code ChannelScoringRule}.
      */
     public final List<RefundChannel> fallbackOrder;
 
     public RetryPolicy(int maxAttempts, long initialDelayMs,
                        double backoffMultiplier, List<RefundChannel> fallbackOrder) {
-        this.maxAttempts      = maxAttempts;
-        this.initialDelayMs   = initialDelayMs;
+        this.maxAttempts       = maxAttempts;
+        this.initialDelayMs    = initialDelayMs;
         this.backoffMultiplier = backoffMultiplier;
         // Defensive copy + immutable view
-        this.fallbackOrder    = Collections.unmodifiableList(
+        this.fallbackOrder     = Collections.unmodifiableList(
                 new ArrayList<>(fallbackOrder));
     }
 

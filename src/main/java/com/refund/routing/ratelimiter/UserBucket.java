@@ -1,20 +1,24 @@
+package com.refund.routing.ratelimiter;
+
 import java.util.ArrayDeque;
 import java.util.concurrent.locks.ReentrantLock;
 
+/**
+ * Per-user sliding-window bucket storing request timestamps.
+ * Used internally by {@link SlidingWindowRateLimiter}.
+ */
 public class UserBucket {
 
     private final ReentrantLock lock = new ReentrantLock();
-    private final ArrayDeque<
-
-            Long> timestamps = new ArrayDeque<>();
+    private final ArrayDeque<Long> timestamps = new ArrayDeque<>();
     private final int limit;
     private final long windowMs;
     // written under lock; read by cleanup thread without lock — volatile suffices
     private volatile long lastAccessTime;
 
     public UserBucket(int limit, long windowMs) {
-        this.limit = limit;
-        this.windowMs = windowMs;
+        this.limit          = limit;
+        this.windowMs       = windowMs;
         this.lastAccessTime = System.currentTimeMillis();
     }
 

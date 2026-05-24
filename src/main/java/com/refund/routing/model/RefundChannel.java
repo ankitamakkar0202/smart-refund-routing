@@ -1,3 +1,5 @@
+package com.refund.routing.model;
+
 /**
  * The channel through which a refund will be processed.
  *

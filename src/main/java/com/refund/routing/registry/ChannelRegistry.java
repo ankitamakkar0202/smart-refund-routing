@@ -1,3 +1,9 @@
+
+
+package com.refund.routing.registry;
+
+import com.refund.routing.model.RefundChannel;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -5,13 +11,9 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Thread-safe store of live {@link ChannelMetadata} for all refund channels.
  *
- * <p>Uses {@link ConcurrentHashMap} for lock-free reads — the same pattern as
- * {@code SlidingWindowRateLimiter}. Reads dominate (every routing request reads
- * channel metadata); writes ({@link #register}) are rare operational updates.
- *
- * <p>Dynamic updates replace the entire {@link ChannelMetadata} record atomically
- * via {@link ConcurrentHashMap#put}, so concurrent readers always see a consistent
- * immutable snapshot without locking.
+ * <p>Uses {@link ConcurrentHashMap} for lock-free reads. Reads dominate (every
+ * routing request reads channel metadata); writes ({@link #register}) are rare
+ * operational updates.
  *
  * <p>Default channel values on construction:
  * <pre>
@@ -24,7 +26,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class ChannelRegistry {
 
-    // Keyed by RefundChannel.name() — ConcurrentHashMap requires non-null keys.
     private final ConcurrentHashMap<String, ChannelMetadata> registry =
             new ConcurrentHashMap<>();
 
@@ -49,7 +50,7 @@ public final class ChannelRegistry {
      */
     public void setAvailability(RefundChannel channel, boolean available) {
         registry.compute(channel.name(), (key, existing) -> {
-            if (existing == null) return null; // channel not registered — no-op
+            if (existing == null) return null;
             return existing.withAvailability(available);
         });
     }
@@ -58,7 +59,6 @@ public final class ChannelRegistry {
 
     /**
      * Returns the metadata for the given channel, or {@code null} if not registered.
-     * Lock-free read.
      */
     public ChannelMetadata getMetadata(RefundChannel channel) {
         return registry.get(channel.name());
@@ -76,9 +76,7 @@ public final class ChannelRegistry {
         return result;
     }
 
-    /**
-     * Returns a snapshot of all registered channels regardless of availability.
-     */
+    /** Returns a snapshot of all registered channels regardless of availability. */
     public List<ChannelMetadata> getAllChannels() {
         return new ArrayList<>(registry.values());
     }
@@ -86,10 +84,10 @@ public final class ChannelRegistry {
     // ─── Defaults ─────────────────────────────────────────────────────────────
 
     private void registerDefaults() {
-        register(new ChannelMetadata(RefundChannel.WALLET_CREDIT,            0.95, 2.0,  0.5,  true));
-        register(new ChannelMetadata(RefundChannel.UPI,                      0.92, 3.0,  1.0,  true));
-        register(new ChannelMetadata(RefundChannel.ORIGINAL_PAYMENT_METHOD,  0.88, 5.0,  2.0,  true));
-        register(new ChannelMetadata(RefundChannel.BANK_TRANSFER,            0.97, 8.0,  24.0, true));
-        register(new ChannelMetadata(RefundChannel.MANUAL_REVIEW,            1.00, 15.0, 48.0, true));
+        register(new ChannelMetadata(RefundChannel.WALLET_CREDIT,           0.95, 2.0,  0.5,  true));
+        register(new ChannelMetadata(RefundChannel.UPI,                     0.92, 3.0,  1.0,  true));
+        register(new ChannelMetadata(RefundChannel.ORIGINAL_PAYMENT_METHOD, 0.88, 5.0,  2.0,  true));
+        register(new ChannelMetadata(RefundChannel.BANK_TRANSFER,           0.97, 8.0,  24.0, true));
+        register(new ChannelMetadata(RefundChannel.MANUAL_REVIEW,           1.00, 15.0, 48.0, true));
     }
 }

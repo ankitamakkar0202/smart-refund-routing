@@ -1,22 +1,28 @@
-import java.util.ArrayList;
-import java.util.List;
+package com.refund.routing;
+
+import com.refund.routing.config.RefundRoutingConfig;
+import com.refund.routing.engine.RefundRoutingEngine;
+import com.refund.routing.model.CustomerTier;
+import com.refund.routing.model.PaymentMethod;
+import com.refund.routing.model.RefundChannel;
+import com.refund.routing.model.RefundRequest;
+import com.refund.routing.model.RoutingDecision;
+import com.refund.routing.ratelimiter.SlidingWindowRateLimiter;
+import com.refund.routing.registry.ChannelMetadata;
+import com.refund.routing.registry.ChannelRegistry;
 
 /**
  * Test suite for the Smart Refund Routing System.
  *
- * <p>Follows the same style as {@code RateLimiterTest.java}:
- * static pass/fail counters, custom assert helpers, {@code main()} as runner.
- * No external testing library required.
- *
  * <p>18 tests covering: high-value routing, VIP routing, original method routing,
  * channel scoring, fallback, rate limiting, input validation, and retry policy.
+ * No external testing library required — run via {@code main()}.
  */
 public class RefundRoutingTest {
 
     private static int passed = 0;
     private static int failed = 0;
 
-    // Shared config with defaults (reads refund-routing.properties if present)
     private static final RefundRoutingConfig CONFIG = new RefundRoutingConfig();
 
     public static void main(String[] args) throws InterruptedException {
@@ -56,7 +62,6 @@ public class RefundRoutingTest {
         testZeroAmountReturnsNoRefundNeeded();
         testNegativeAmountReturnsError();
 
-        // ── Results ───────────────────────────────────────────────────────────
         System.out.println("\n=== Results: " + passed + " passed, " + failed + " failed ===");
         if (failed > 0) System.exit(1);
     }
@@ -158,7 +163,6 @@ public class RefundRoutingTest {
 
     static void testOriginalMethodUsedWhenAvailableAndHighSuccessRate() {
         ChannelRegistry registry = defaultRegistry();
-        // Ensure OPM channel has success rate above 0.85 threshold
         registry.register(new ChannelMetadata(RefundChannel.ORIGINAL_PAYMENT_METHOD,
                 0.92, 5.0, 2.0, true));
         RefundRoutingEngine engine = new RefundRoutingEngine(CONFIG, registry);
@@ -177,7 +181,6 @@ public class RefundRoutingTest {
 
     static void testOriginalMethodSkippedWhenLowSuccessRate() {
         ChannelRegistry registry = defaultRegistry();
-        // Set success rate below the 0.85 threshold
         registry.register(new ChannelMetadata(RefundChannel.ORIGINAL_PAYMENT_METHOD,
                 0.80, 5.0, 2.0, true));
         RefundRoutingEngine engine = new RefundRoutingEngine(CONFIG, registry);
@@ -196,7 +199,6 @@ public class RefundRoutingTest {
         ChannelRegistry registry = defaultRegistry();
         RefundRoutingEngine engine = new RefundRoutingEngine(CONFIG, registry);
 
-        // originalMethodAvailable = false in the request
         RefundRequest req = request("r9", "m1", "c1", 10_000.0,
                 CustomerTier.STANDARD, PaymentMethod.CREDIT_CARD, false, past());
 
@@ -226,10 +228,6 @@ public class RefundRoutingTest {
     }
 
     static void testScoringPicksBestChannel() {
-        // Only WALLET_CREDIT and BANK_TRANSFER available
-        // WALLET score = 0.95×0.6 − (2/8)×0.4 = 0.570 − 0.100 = 0.470
-        // BANK   score = 0.97×0.6 − (8/8)×0.4 = 0.582 − 0.400 = 0.182
-        // Winner: WALLET_CREDIT
         ChannelRegistry registry = new ChannelRegistry();
         registry.setAvailability(RefundChannel.UPI, false);
         registry.setAvailability(RefundChannel.ORIGINAL_PAYMENT_METHOD, false);
@@ -260,30 +258,24 @@ public class RefundRoutingTest {
         RoutingDecision d = engine.route(req);
         engine.close();
 
-        // ChannelScoringRule should attach a RetryPolicy
         assertTrue("scoring rule should produce a non-null RetryPolicy",
                 d.retryPolicy != null);
         assertTrue("fallback order should not be empty",
                 d.retryPolicy != null && !d.retryPolicy.fallbackOrder.isEmpty());
-        // Primary channel must not appear in fallback list
         boolean primaryInFallback = d.retryPolicy != null &&
                 d.retryPolicy.fallbackOrder.contains(d.selectedChannel);
-        assertFalse("primary channel must not appear in fallbackOrder",
-                primaryInFallback);
+        assertFalse("primary channel must not appear in fallbackOrder", primaryInFallback);
     }
 
     // ─── FallbackRule ─────────────────────────────────────────────────────────
 
     static void testFallbackWhenAllChannelsUnavailable() {
         ChannelRegistry registry = new ChannelRegistry();
-        // Mark ALL channels unavailable so ChannelScoringRule finds an empty list
-        // and returns null, allowing FallbackRule to take over.
         registry.setAvailability(RefundChannel.WALLET_CREDIT,           false);
         registry.setAvailability(RefundChannel.UPI,                     false);
         registry.setAvailability(RefundChannel.ORIGINAL_PAYMENT_METHOD, false);
         registry.setAvailability(RefundChannel.BANK_TRANSFER,           false);
         registry.setAvailability(RefundChannel.MANUAL_REVIEW,           false);
-        // FallbackRule checks BANK_TRANSFER — unavailable → escalates to MANUAL_REVIEW
 
         RefundRoutingEngine engine = new RefundRoutingEngine(CONFIG, registry);
 
@@ -301,7 +293,6 @@ public class RefundRoutingTest {
     // ─── Rule chain priority ──────────────────────────────────────────────────
 
     static void testHighValueOverridesVip() {
-        // VIP customer + high-value amount: HighValueRule fires first (priority 1 > 2)
         ChannelRegistry registry = defaultRegistry();
         RefundRoutingEngine engine = new RefundRoutingEngine(CONFIG, registry);
 
@@ -320,10 +311,8 @@ public class RefundRoutingTest {
     // ─── Rate limiting ────────────────────────────────────────────────────────
 
     static void testRateLimitBlocksAfterLimit() throws InterruptedException {
-        // Use a tiny window (1 000 ms) with limit=3 to avoid sleeping long
         SlidingWindowRateLimiter limiter = new SlidingWindowRateLimiter(3, 1_000L);
-        RefundRoutingEngine engine = new RefundRoutingEngine(
-                CONFIG, defaultRegistry(), limiter);
+        RefundRoutingEngine engine = new RefundRoutingEngine(CONFIG, defaultRegistry(), limiter);
 
         int allowed = 0;
         RoutingDecision lastDecision = null;
@@ -342,16 +331,13 @@ public class RefundRoutingTest {
 
     static void testRateLimitIsolatedPerMerchant() throws InterruptedException {
         SlidingWindowRateLimiter limiter = new SlidingWindowRateLimiter(2, 1_000L);
-        RefundRoutingEngine engine = new RefundRoutingEngine(
-                CONFIG, defaultRegistry(), limiter);
+        RefundRoutingEngine engine = new RefundRoutingEngine(CONFIG, defaultRegistry(), limiter);
 
-        // Exhaust limit for merchant-A
         engine.route(request("ra1", "merchant-A", "c1", 500.0,
                 CustomerTier.STANDARD, PaymentMethod.UPI, false, past()));
         engine.route(request("ra2", "merchant-A", "c1", 500.0,
                 CustomerTier.STANDARD, PaymentMethod.UPI, false, past()));
 
-        // merchant-B should be unaffected
         RoutingDecision bDecision = engine.route(
                 request("rb1", "merchant-B", "c1", 500.0,
                         CustomerTier.STANDARD, PaymentMethod.UPI, false, past()));
@@ -397,10 +383,9 @@ public class RefundRoutingTest {
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private static ChannelRegistry defaultRegistry() {
-        return new ChannelRegistry(); // populated with defaults
+        return new ChannelRegistry();
     }
 
-    /** Constructs a refund request; all fields specified explicitly for readability. */
     private static RefundRequest request(String requestId, String merchantId,
                                          String customerId, double amount,
                                          CustomerTier tier, PaymentMethod method,
@@ -409,7 +394,6 @@ public class RefundRoutingTest {
                 tier, method, methodAvailable, transactionDate);
     }
 
-    /** Returns a plausible past transaction timestamp (2 hours ago). */
     private static long past() {
         return System.currentTimeMillis() - (2 * 60 * 60 * 1000L);
     }

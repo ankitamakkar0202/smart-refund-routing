@@ -1,10 +1,12 @@
+package com.refund.routing.model;
+
 /**
  * Immutable DTO representing the outcome of a refund routing decision.
  *
  * <p>Three factory paths:
  * <ul>
  *   <li>Normal constructor — successful routing with a {@link RetryPolicy}</li>
- *   <li>{@link #error(String, String)} — rate-limit exceeded or validation failure</li>
+ *   <li>{@link #error(String, String, String, long)} — rate-limit exceeded or validation failure</li>
  *   <li>{@link #noRefundNeeded(String, long)} — zero-amount transaction; no channel needed</li>
  * </ul>
  *
@@ -15,7 +17,7 @@ public final class RoutingDecision {
     public final String requestId;
     public final RefundChannel selectedChannel;
     public final String reason;
-    /** Name of the {@link RoutingRule} that produced this decision. */
+    /** Name of the routing rule that produced this decision. */
     public final String appliedRule;
     /** Weighted score of the selected channel; 0.0 for non-scored paths. */
     public final double channelScore;
@@ -35,15 +37,15 @@ public final class RoutingDecision {
                            String reason, String appliedRule,
                            double channelScore, long transactionDate,
                            RetryPolicy retryPolicy) {
-        this.requestId       = requestId;
-        this.selectedChannel = selectedChannel;
-        this.reason          = reason;
-        this.appliedRule     = appliedRule;
-        this.channelScore    = channelScore;
-        this.transactionDate = transactionDate;
+        this.requestId        = requestId;
+        this.selectedChannel  = selectedChannel;
+        this.reason           = reason;
+        this.appliedRule      = appliedRule;
+        this.channelScore     = channelScore;
+        this.transactionDate  = transactionDate;
         this.decidedAtEpochMs = System.currentTimeMillis();
         this.processingTimeMs = this.decidedAtEpochMs - transactionDate;
-        this.retryPolicy     = retryPolicy;
+        this.retryPolicy      = retryPolicy;
     }
 
     // Private constructor for error and no-refund cases (no RetryPolicy).
@@ -65,10 +67,6 @@ public final class RoutingDecision {
     /**
      * Creates an error decision (rate-limit exceeded, validation failure, etc.).
      *
-     * <p>Sets {@code selectedChannel=ERROR} and encodes the error type in
-     * {@code appliedRule} so the HTTP layer can select the correct status code
-     * (429 vs 400) without adding a separate boolean field.
-     *
      * @param appliedRule  use {@code "RATE_LIMITED"} or {@code "VALIDATION_ERROR"}
      */
     public static RoutingDecision error(String requestId, String reason,
@@ -89,10 +87,6 @@ public final class RoutingDecision {
 
     // ─── JSON serialisation ───────────────────────────────────────────────────
 
-    /**
-     * Serialises this decision to a JSON object string.
-     * Hand-built — no external library required.
-     */
     public String toJson() {
         StringBuilder sb = new StringBuilder();
         sb.append("{");
@@ -113,8 +107,6 @@ public final class RoutingDecision {
         sb.append("}");
         return sb.toString();
     }
-
-    // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private static void appendStr(StringBuilder sb, String key, String value, boolean first) {
         if (!first) sb.append(",");

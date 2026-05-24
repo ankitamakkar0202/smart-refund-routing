@@ -1,7 +1,9 @@
+package com.refund.routing.model;
+
 /**
  * The original payment method used for the transaction being refunded.
  *
- * <p>Used by {@link OriginalPaymentMethodRule} to assess whether the original
+ * <p>Used by {@code OriginalPaymentMethodRule} to assess whether the original
  * instrument is a viable refund target.
  */
 public enum PaymentMethod {

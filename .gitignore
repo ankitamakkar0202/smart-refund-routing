@@ -1,5 +1,6 @@
 # Compiled Java class files
 out/
+target/
 *.class
 
 # IntelliJ IDEA

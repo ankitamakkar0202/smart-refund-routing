@@ -1,3 +1,12 @@
+package com.refund.routing.server;
+
+import com.refund.routing.config.RefundRoutingConfig;
+import com.refund.routing.engine.RefundRoutingEngine;
+import com.refund.routing.model.RefundChannel;
+import com.refund.routing.model.RefundRequest;
+import com.refund.routing.model.RoutingDecision;
+import com.refund.routing.registry.ChannelMetadata;
+import com.refund.routing.util.StructuredLogger;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
@@ -14,8 +23,7 @@ import java.util.concurrent.Executors;
  * Lightweight HTTP server exposing the refund routing engine via three endpoints.
  *
  * <p>Uses the JDK's built-in {@code com.sun.net.httpserver.HttpServer} — no
- * external web framework required. Available since Java 6; no {@code --add-modules}
- * flag needed on Java 11+.
+ * external web framework required.
  *
  * <p>SRP: this class is purely an HTTP adapter. All business logic lives in
  * {@link RefundRoutingEngine}.
@@ -42,7 +50,6 @@ public final class RefundRoutingServer {
         httpServer.createContext("/api/v1/channels",     new ChannelsHandler());
         httpServer.createContext("/api/v1/health",       new HealthHandler());
 
-        // 4 worker threads — enough for a microservice; daemon so JVM exits cleanly
         httpServer.setExecutor(Executors.newFixedThreadPool(4, r -> {
             Thread t = new Thread(r, "refund-http-worker");
             t.setDaemon(true);
@@ -85,10 +92,6 @@ public final class RefundRoutingServer {
 
     // ─── Handlers ─────────────────────────────────────────────────────────────
 
-    /**
-     * POST /api/v1/refund/route
-     * Accepts a JSON {@link RefundRequest}, returns a JSON {@link RoutingDecision}.
-     */
     private class RouteHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -118,10 +121,6 @@ public final class RefundRoutingServer {
         }
     }
 
-    /**
-     * GET /api/v1/channels
-     * Returns a JSON array of all registered {@link ChannelMetadata}.
-     */
     private class ChannelsHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -147,10 +146,6 @@ public final class RefundRoutingServer {
         }
     }
 
-    /**
-     * GET /api/v1/health
-     * Returns {@code {"status":"UP"}} — used by load balancers and monitoring.
-     */
     private class HealthHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -160,19 +155,11 @@ public final class RefundRoutingServer {
 
     // ─── HTTP status resolution ───────────────────────────────────────────────
 
-    /**
-     * Maps an applied-rule sentinel to the appropriate HTTP status code.
-     * <ul>
-     *   <li>RATE_LIMITED → 429</li>
-     *   <li>VALIDATION_ERROR / INTERNAL_ERROR → 400 / 500</li>
-     *   <li>everything else → 200</li>
-     * </ul>
-     */
     private static int resolveStatus(RoutingDecision decision) {
         if (decision.selectedChannel == RefundChannel.ERROR) {
-            if ("RATE_LIMITED".equals(decision.appliedRule))      return 429;
-            if ("VALIDATION_ERROR".equals(decision.appliedRule))  return 400;
-            if ("INTERNAL_ERROR".equals(decision.appliedRule))    return 500;
+            if ("RATE_LIMITED".equals(decision.appliedRule))     return 429;
+            if ("VALIDATION_ERROR".equals(decision.appliedRule)) return 400;
+            if ("INTERNAL_ERROR".equals(decision.appliedRule))   return 500;
         }
         return 200;
     }

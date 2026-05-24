@@ -1,3 +1,5 @@
+package com.refund.routing.model;
+
 /**
  * Immutable DTO representing an inbound refund routing request.
  *
@@ -56,14 +58,14 @@ public final class RefundRequest {
             throw new IllegalArgumentException("Request body is empty");
         }
 
-        String requestId             = requireString(json, "requestId");
-        String merchantId            = requireString(json, "merchantId");
-        String customerId            = requireString(json, "customerId");
-        double amount                = requireDouble(json, "amount");
-        CustomerTier tier            = requireEnum(json, "customerTier", CustomerTier.class);
-        PaymentMethod method         = requireEnum(json, "originalPaymentMethod", PaymentMethod.class);
-        boolean methodAvailable      = requireBoolean(json, "originalMethodAvailable");
-        long transactionDate         = requireLong(json, "transactionDate");
+        String requestId        = requireString(json, "requestId");
+        String merchantId       = requireString(json, "merchantId");
+        String customerId       = requireString(json, "customerId");
+        double amount           = requireDouble(json, "amount");
+        CustomerTier tier       = requireEnum(json, "customerTier", CustomerTier.class);
+        PaymentMethod method    = requireEnum(json, "originalPaymentMethod", PaymentMethod.class);
+        boolean methodAvailable = requireBoolean(json, "originalMethodAvailable");
+        long transactionDate    = requireLong(json, "transactionDate");
 
         if (requestId.isBlank())  throw new IllegalArgumentException("requestId must not be blank");
         if (merchantId.isBlank()) throw new IllegalArgumentException("merchantId must not be blank");
@@ -75,7 +77,6 @@ public final class RefundRequest {
 
     // ─── Extraction helpers ───────────────────────────────────────────────────
 
-    /** Extracts a quoted string value for the given JSON key. */
     private static String requireString(String json, String key) {
         String marker = "\"" + key + "\"";
         int keyIdx = json.indexOf(marker);
@@ -84,7 +85,6 @@ public final class RefundRequest {
         int colonIdx = json.indexOf(':', keyIdx + marker.length());
         if (colonIdx < 0) throw new IllegalArgumentException("Malformed JSON near field: " + key);
 
-        // Skip whitespace after colon
         int start = colonIdx + 1;
         while (start < json.length() && Character.isWhitespace(json.charAt(start))) start++;
 
@@ -92,18 +92,16 @@ public final class RefundRequest {
             throw new IllegalArgumentException("Expected string value for field: " + key);
         }
 
-        // Find closing quote, handling simple escaped quotes
         int end = start + 1;
         while (end < json.length()) {
             char c = json.charAt(end);
             if (c == '\\') { end += 2; continue; }
-            if (c == '"')  { break;    }
+            if (c == '"')  { break; }
             end++;
         }
         return json.substring(start + 1, end);
     }
 
-    /** Extracts a numeric (double) value for the given JSON key. */
     private static double requireDouble(String json, String key) {
         String raw = extractBareValue(json, key);
         try {
@@ -113,7 +111,6 @@ public final class RefundRequest {
         }
     }
 
-    /** Extracts a numeric (long) value for the given JSON key. */
     private static long requireLong(String json, String key) {
         String raw = extractBareValue(json, key);
         try {
@@ -123,7 +120,6 @@ public final class RefundRequest {
         }
     }
 
-    /** Extracts a boolean value for the given JSON key. */
     private static boolean requireBoolean(String json, String key) {
         String raw = extractBareValue(json, key).toLowerCase();
         if ("true".equals(raw))  return true;
@@ -131,7 +127,6 @@ public final class RefundRequest {
         throw new IllegalArgumentException("Invalid boolean for field '" + key + "': " + raw);
     }
 
-    /** Extracts an enum constant (case-insensitive) for the given JSON key. */
     private static <E extends Enum<E>> E requireEnum(String json, String key, Class<E> type) {
         String raw = requireString(json, key).toUpperCase().replace("-", "_").replace(" ", "_");
         try {
@@ -143,10 +138,6 @@ public final class RefundRequest {
         }
     }
 
-    /**
-     * Extracts a bare (unquoted) token — used for numbers and booleans.
-     * The token ends at the next {@code ,}, {@code }}, or whitespace.
-     */
     private static String extractBareValue(String json, String key) {
         String marker = "\"" + key + "\"";
         int keyIdx = json.indexOf(marker);

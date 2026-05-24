@@ -1,3 +1,19 @@
+package com.refund.routing.engine;
+
+import com.refund.routing.config.RefundRoutingConfig;
+import com.refund.routing.model.RefundChannel;
+import com.refund.routing.model.RefundRequest;
+import com.refund.routing.model.RoutingDecision;
+import com.refund.routing.ratelimiter.SlidingWindowRateLimiter;
+import com.refund.routing.registry.ChannelRegistry;
+import com.refund.routing.rule.ChannelScoringRule;
+import com.refund.routing.rule.FallbackRule;
+import com.refund.routing.rule.HighValueRule;
+import com.refund.routing.rule.OriginalPaymentMethodRule;
+import com.refund.routing.rule.RoutingRule;
+import com.refund.routing.rule.VipCustomerRule;
+import com.refund.routing.util.StructuredLogger;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -7,12 +23,11 @@ import java.util.List;
  * <p>Pipeline stages (in order):
  * <ol>
  *   <li><b>Input validation</b> — zero amount → no-refund decision; negative
- *       amount or blank IDs → validation error.</li>
- *   <li><b>Rate limiting</b> — reuses {@link SlidingWindowRateLimiter} keyed by
- *       {@code merchantId}. Exceeding the limit returns a 429-style error decision.</li>
+ *       amount → validation error.</li>
+ *   <li><b>Rate limiting</b> — keyed by {@code merchantId}. Exceeding the limit
+ *       returns a 429-style error decision.</li>
  *   <li><b>Rule chain</b> — iterates {@link RoutingRule} implementations in
- *       priority order; returns the first non-null decision. Each rule is wrapped
- *       in a try/catch so a buggy rule logs an ERROR and the chain continues.</li>
+ *       priority order; returns the first non-null decision.</li>
  * </ol>
  *
  * <p>SOLID alignment:
@@ -43,10 +58,10 @@ public final class RefundRoutingEngine {
 
     /**
      * Fully injectable constructor — used by tests to control the rate limiter
-     * window precisely (mirrors the small-window pattern in RateLimiterTest.java).
+     * window precisely.
      */
-    RefundRoutingEngine(RefundRoutingConfig config, ChannelRegistry registry,
-                        SlidingWindowRateLimiter rateLimiter) {
+    public RefundRoutingEngine(RefundRoutingConfig config, ChannelRegistry registry,
+                               SlidingWindowRateLimiter rateLimiter) {
         this.registry    = registry;
         this.rateLimiter = rateLimiter;
         this.ruleChain   = buildChain(config, registry);
@@ -61,7 +76,7 @@ public final class RefundRoutingEngine {
      */
     public RoutingDecision route(RefundRequest request) {
 
-        // ── Stage 1: Input validation ──────────────────────────────────────────
+        // Stage 1: Input validation
         if (request.amount == 0.0) {
             StructuredLogger.event("no_refund_required")
                     .field("requestId",  request.requestId)
@@ -81,7 +96,7 @@ public final class RefundRoutingEngine {
                     "VALIDATION_ERROR", request.transactionDate);
         }
 
-        // ── Stage 2: Rate limiting ─────────────────────────────────────────────
+        // Stage 2: Rate limiting
         if (!rateLimiter.isAllowed(request.merchantId)) {
             StructuredLogger.event("rate_limit_exceeded")
                     .field("requestId",  request.requestId)
@@ -92,7 +107,7 @@ public final class RefundRoutingEngine {
                     "RATE_LIMITED", request.transactionDate);
         }
 
-        // ── Stage 3: Rule chain ────────────────────────────────────────────────
+        // Stage 3: Rule chain
         for (RoutingRule rule : ruleChain) {
             RoutingDecision decision = null;
             try {
@@ -103,7 +118,6 @@ public final class RefundRoutingEngine {
                         .field("ruleName",  rule.name())
                         .field("error",     e.getClass().getSimpleName() + ": " + e.getMessage())
                         .error();
-                // Continue to next rule — a buggy rule must not break the chain
                 continue;
             }
 
@@ -115,23 +129,21 @@ public final class RefundRoutingEngine {
                 continue;
             }
 
-            // Rule matched — log and return
             StructuredLogger.event("refund_routed")
-                    .field("requestId",       request.requestId)
-                    .field("merchantId",      request.merchantId)
-                    .field("customerId",      request.customerId)
-                    .field("amount",          request.amount)
-                    .field("selectedChannel", decision.selectedChannel.name())
-                    .field("appliedRule",     decision.appliedRule)
-                    .field("channelScore",    decision.channelScore)
+                    .field("requestId",        request.requestId)
+                    .field("merchantId",       request.merchantId)
+                    .field("customerId",       request.customerId)
+                    .field("amount",           request.amount)
+                    .field("selectedChannel",  decision.selectedChannel.name())
+                    .field("appliedRule",      decision.appliedRule)
+                    .field("channelScore",     decision.channelScore)
                     .field("processingTimeMs", decision.processingTimeMs)
                     .info();
 
             return decision;
         }
 
-        // Should never reach here — FallbackRule always returns non-null.
-        // Defensive guard.
+        // Defensive guard — FallbackRule always returns non-null.
         return RoutingDecision.error(request.requestId,
                 "Internal error: no rule produced a decision.",
                 "INTERNAL_ERROR", request.transactionDate);

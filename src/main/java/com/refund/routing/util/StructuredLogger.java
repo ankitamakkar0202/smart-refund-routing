@@ -1,3 +1,5 @@
+package com.refund.routing.util;
+
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -13,16 +15,10 @@ import java.util.Map;
  * <p>Usage:
  * <pre>
  *   StructuredLogger.event("refund_routed")
- *       .field("requestId",       req.requestId)
- *       .field("selectedChannel", decision.selectedChannel.name())
+ *       .field("requestId",        req.requestId)
+ *       .field("selectedChannel",  decision.selectedChannel.name())
  *       .field("processingTimeMs", decision.processingTimeMs)
  *       .info();
- * </pre>
- *
- * Output:
- * <pre>
- *   {"timestamp":"2026-05-24T10:30:00.123Z","level":"INFO","event":"refund_routed",
- *    "requestId":"req-123","selectedChannel":"WALLET_CREDIT","processingTimeMs":7200000}
  * </pre>
  */
 public final class StructuredLogger {
@@ -43,32 +39,27 @@ public final class StructuredLogger {
     public static final class LogEntry {
 
         private final String eventName;
-        // LinkedHashMap preserves insertion order so JSON fields are predictable.
         private final Map<String, String> fields = new LinkedHashMap<>();
 
         private LogEntry(String eventName) {
             this.eventName = eventName;
         }
 
-        /** Add a String field. Null values are serialised as JSON {@code null}. */
         public LogEntry field(String key, String value) {
             fields.put(key, value == null ? null : value);
             return this;
         }
 
-        /** Add a numeric field (long). */
         public LogEntry field(String key, long value) {
             fields.put(key, "#NUM#" + value);
             return this;
         }
 
-        /** Add a numeric field (double), formatted to 4 decimal places. */
         public LogEntry field(String key, double value) {
             fields.put(key, "#NUM#" + String.format("%.4f", value));
             return this;
         }
 
-        /** Add a boolean field. */
         public LogEntry field(String key, boolean value) {
             fields.put(key, "#BOOL#" + value);
             return this;
@@ -93,16 +84,12 @@ public final class StructuredLogger {
 
             sb.append("}");
 
-            // Errors go to stderr; everything else to stdout. Synchronise to
-            // avoid interleaved output from multiple HTTP worker threads.
             if (level == Level.ERROR) {
                 synchronized (System.err) { System.err.println(sb); }
             } else {
                 synchronized (System.out) { System.out.println(sb); }
             }
         }
-
-        // ── JSON serialisation helpers ─────────────────────────────────────
 
         private static void appendStringField(StringBuilder sb, String key,
                                               String value, boolean first) {
@@ -115,9 +102,9 @@ public final class StructuredLogger {
             if (raw == null) {
                 sb.append("null");
             } else if (raw.startsWith("#NUM#")) {
-                sb.append(raw.substring(5));          // emit as bare number
+                sb.append(raw.substring(5));
             } else if (raw.startsWith("#BOOL#")) {
-                sb.append(raw.substring(6));          // emit as bare boolean
+                sb.append(raw.substring(6));
             } else {
                 sb.append("\"").append(escape(raw)).append("\"");
             }

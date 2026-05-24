@@ -1,3 +1,11 @@
+package com.refund.routing.rule;
+
+import com.refund.routing.model.RefundChannel;
+import com.refund.routing.model.RefundRequest;
+import com.refund.routing.model.RoutingDecision;
+import com.refund.routing.registry.ChannelMetadata;
+import com.refund.routing.registry.ChannelRegistry;
+
 /**
  * Rule 5 — Fallback (Safety Net).
  *
@@ -6,25 +14,15 @@
  *
  * <p>Strategy:
  * <ol>
- *   <li>Prefer {@link RefundChannel#BANK_TRANSFER} — highest success rate among
- *       standard channels (0.97).</li>
- *   <li>If BANK_TRANSFER is also unavailable in the registry, fall back to
- *       {@link RefundChannel#MANUAL_REVIEW} — the absolute last resort, which
- *       has a 100% processing guarantee (human review).</li>
+ *   <li>Prefer {@link RefundChannel#BANK_TRANSFER} — highest success rate.</li>
+ *   <li>If BANK_TRANSFER is also unavailable, escalate to
+ *       {@link RefundChannel#MANUAL_REVIEW} — 100% processing guarantee.</li>
  * </ol>
- *
- * <p>This rule is only reached when all prior rules returned {@code null}, which
- * means no channels scored (all unavailable) and no special-case rules fired.
- * In practice this should be rare; its presence ensures the system never silently
- * drops a refund request.
  */
 public final class FallbackRule implements RoutingRule {
 
     private final ChannelRegistry registry;
 
-    /**
-     * @param registry queried to check whether BANK_TRANSFER is currently available
-     */
     public FallbackRule(ChannelRegistry registry) {
         this.registry = registry;
     }
@@ -43,8 +41,6 @@ public final class FallbackRule implements RoutingRule {
             reason += " BANK_TRANSFER is unavailable; escalating to MANUAL_REVIEW.";
         }
 
-        // Fallback decisions don't carry a retry policy — by definition we've
-        // exhausted all scored options. The caller should escalate to support.
         return new RoutingDecision(req.requestId, selected, reason,
                 name(), 0.0, req.transactionDate, null);
     }
